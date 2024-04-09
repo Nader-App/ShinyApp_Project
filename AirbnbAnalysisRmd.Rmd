@@ -1,0 +1,339 @@
+---
+title: "AirBnB Data Analysis"
+author: "Nader Thabet"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(shiny)
+library(shinydashboard)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(DT)
+library(leaflet)
+library(lubridate)
+```
+# Introduction
+
+## Dataset Overview
+
+The dataset used for this analysis comes from AirBnB listings and is rich with information pertinent to understanding the rental landscape. 
+
+### Listing Details
+- **General Information**: Such as the listing ID, name, and descriptions that provide an initial glimpse into the property.
+- **Property Characteristics**: Including the type of property, the room configuration, and its capacity for guests.
+- **Pricing Structure**: Encompassing the base price, potential additional rates, and any security deposits or cleaning fees.
+- **Amenities and Features**: Listing the various amenities that a property offers, which may include the size of the property and the bed types available.
+
+### Host Information
+- **Identification**: Details like the host's ID, name, and verification status give an insight into who is offering the property.
+- **Profile**: The host's background information, including location and the duration of their hosting experience.
+- **Performance Metrics**: Data on how responsive and effective the host is, such as response rates and superhost status.
+
+### Geographical Data
+- **Location Information**: This goes beyond just the city, encompassing neighborhood specifics and precise geolocation data.
+
+### Review and Rating Information
+- **Review Metrics**: Ratings and reviews provide a measure of guests' satisfaction across various dimensions.
+- **Review Dates**: The history of reviews can indicate a listing's popularity and consistency over time.
+
+### Availability and Booking
+- **Availability**: How often the property is available, reflecting its popularity and usage patterns.
+- **Booking Requirements**: Rules set by the host regarding cancellations, guest requirements, and other booking conditions.
+
+### Miscellaneous
+- **Legal and Compliance**: Information on the regulatory status of the listing, including licenses and jurisdictional compliance.
+
+This introduction to the dataset sets the stage for a detailed exploration of the factors that influence the AirBnB market in Paris through a user-friendly Shiny application.
+
+
+## Objectives of the Shiny Application
+
+The Shiny application is designed to convert complex dataset analyses into accessible insights with an intuitive interface. It serves the following purposes:
+
+1. **Relationship between Prices and Apartment Features**: It allows users to explore the correlation between various apartment features and their impact on the listing prices.
+2. **Number of Apartments per Owner**: It provides a view into the distribution of properties, indicating which hosts are listing multiple apartments.
+3. **Renting Price per City Quarter**: It analyzes the price variance across different city quarters, offering insights into geographic pricing trends.
+4. **Visit Frequency of Different Quarters**: It investigates visitation data to reveal the popularity and seasonality trends of different areas in the city.
+
+# Data Loading and Preprocessing
+
+The dataset was initially sourced from an .Rdata file. Preprocessing involved several steps to ensure the data was clean and analysis-ready.
+
+## Data Loading
+
+The dataset was loaded into R for analysis. We carefully reviewed the variables to gauge their relevance and utility for our objectives.
+
+# setwd("path/to/data/directory")
+# Then, load the dataset
+```{r data-loading, echo=TRUE}
+load("C:/Users/NADER/Downloads/AirBnB (1) (1).Rdata")
+```
+# Data Preparation and Transformation
+
+Before diving into the analysis and visualization, it's crucial to clean and transform our dataset. This section outlines the steps taken to ensure our data is analysis-ready.
+
+## Cleaning Price Data
+
+The dataset contains prices in a text format, including currency symbols and commas. For accurate analysis, we convert these text strings into numeric values by removing non-numeric characters.
+```{r clean-price-data}
+L$price <- as.numeric(gsub("[$,]", "", L$price))
+```
+
+## Processing Text Data
+The amenities and description fields are essential for our analysis. To facilitate string operations later on, we ensure they are treated as character vectors.
+
+```{r}
+L$amenities <- as.character(L$amenities)
+```
+
+# Assuming `description` needs similar treatment
+```{r}
+L$description <- as.character(L$description)
+```
+
+## Engineering Features from Amenities
+Each property listing includes amenities, which are provided as a concatenated string. We parse these strings to count the number of amenities for each listing, providing a more quantitative measure for analysis.
+
+```{r}
+L$number_amenities <- sapply(strsplit(L$amenities, "[{}\",]"), function(x) length(x[x != ""]))
+```
+
+
+## Addressing Missing Values
+Some listings may not specify their amenities, resulting in NA values for the number_amenities field. To maintain data integrity, we assume these listings have zero amenities.
+
+```{r}
+L$number_amenities[is.na(L$number_amenities)] <- 0
+```
+
+
+## Date Conversion
+For any time series analysis or visualizations that involve dates, it's essential to ensure the date data is in the correct format. Here, we convert the date field from a character to a Date object.
+
+```{r}
+R$date <- as.Date(as.character(R$date))
+```
+
+
+With these preparation steps complete, our dataset is now ready for exploratory data analysis (EDA), modeling, and visualization within our Shiny application.
+
+
+This section succinctly documents the essential data preparation steps, making it clear what transformations are performed and why. Including this in your R Markdown document ensures that your analytical process is transparent and reproducible.
+
+# Shiny Application User Interface
+
+The user interface (UI) of our Shiny application is designed to be intuitive and user-friendly, facilitating easy navigation through the various analyses available. Here's an overview of the UI components and their functionalities:
+
+## Dashboard Structure
+
+The application utilizes the `shinydashboard` package to create a polished and responsive dashboard. The dashboard is divided into three main sections: the header, sidebar, and body.
+
+### Dashboard Header
+
+The dashboard header is defined with a title for the application.
+
+```{r}
+dashboardHeader(title = "AirBnB Analysis", titleWidth = 250)
+
+
+
+dashboardSidebar(
+  width = 250,
+  sidebarMenu(
+    menuItem("Price vs Features", tabName = "price_features", icon = icon("chart-line")),
+    menuItem("Apartments per Owner", tabName = "apartments_owner", icon = icon("building")),
+    menuItem("Price per Quarter", tabName = "price_quarter", icon = icon("calendar-alt")),
+    menuItem("Visit Frequency", tabName = "visit_frequency", icon = icon("clock")),
+    menuItem("Interactive Map", tabName = "interactive_map", icon = icon("map-marked-alt"))
+  )
+)
+```
+
+
+Styling
+Custom CSS is applied to personalize the appearance of the dashboard, enhancing the visual appeal and user experience.
+
+```{r}
+tags$head(
+  tags$style(HTML("
+    .content-wrapper { background-color: #FFF0F0 !important; }
+    .main-header .navbar, .main-header .logo { background-color: #FF5A5F !important; }
+    .main-sidebar { background-color: #D50000 !important; }
+    .sidebar-menu > li > a { color: #FFFFFF !important; }
+    .sidebar-menu > li:hover > a, .sidebar-menu > li.active > a { background-color: #FF5A5F !important; color: #FFFFFF !important; }
+    .sidebar-menu .header { color: #FFD3D3 !important; }
+    .box-body { background-color: #FFEBEB !important; }
+  "))
+)
+```
+
+Dynamic Content
+Each tabItem contains dynamic content, such as input widgets for selecting features to analyze and output plots that display the results of the analysis.
+
+Dynamic Correlation Analysis: Users can select features to explore their relationship with property prices.
+Distribution of Apartments per Owner: Offers insights into the number of properties managed by individual hosts.
+Average Renting Price per City Quarter: Visualizes the variation in rental prices across different city quarters.
+Visit Frequency of Different Quarters Over Time: Analyzes the popularity of city quarters based on visitation data.
+Interactive Map: Displays AirBnB listings on an interactive map, providing a geographical perspective on the data.
+
+
+# Server Logic
+
+The server logic of our Shiny application is where the reactive elements and outputs are defined. It processes user inputs and computes the outputs that are rendered in the UI. Let's go through the main components of the server logic:
+
+## Scatter Plot for Price vs Selected Features
+
+The scatter plot dynamically visualizes the relationship between the listing price and a feature selected by the user.
+
+
+#output$scatterPlot <- renderPlotly({
+#  # Generate scatter plot based on selected feature
+#  feature_selected <- input$featureSelect
+#  plot_data <- L %>% select(price, !!sym(feature_selected)) %>% na.omit()
+#  p <- ggplot(plot_data, aes_string(x = feature_selected, y = "price")) +
+#    geom_point(aes(color = price), alpha = 0.5) +
+#    labs(x = feature_selected, y = "Price in Euros") +
+#    theme_minimal()
+#  ggplotly(p)
+#})
+
+This block listens for changes to input$featureSelect, extracts the relevant data, and plots it using ggplot2 and plotly for interactive visualization.
+
+**Apartments Per Owner Analysis**
+This part computes the distribution of apartments across owners, allowing for insights into property ownership concentration.
+```{r}
+apartments_per_owner <- reactive({
+  data <- L %>%
+    group_by(host_id, host_name) %>%
+    summarise(number_of_apartments = n_distinct(id), .groups = 'drop') %>%
+    arrange(desc(number_of_apartments))
+  data <- data %>% 
+    filter(number_of_apartments >= input$apartmentFilter[1] & 
+             number_of_apartments <= input$apartmentFilter[2])
+  data
+})
+#output$ownerTable <- renderDataTable({
+#  apartments_per_owner()
+#}, options = list(pageLength = 10))
+```
+
+This section creates a reactive expression to filter and summarize the data based on user input and then renders it as a datatable.
+
+**Average Renting Price Per City Quarter**
+Calculates and visualizes the average renting price for selected city quarters.
+
+```{r}
+# output$avgPricePlot <- renderPlotly({
+#   filtered_data <- if (length(input$quarterSelect) > 0) {
+#     L %>% filter(neighbourhood_cleansed %in% input$quarterSelect)
+#   } else {
+#     L
+#   }
+#   avg_prices <- filtered_data %>%
+#     group_by(neighbourhood_cleansed) %>%
+#     summarise(Average_Price = mean(price, na.rm = TRUE)) %>%
+#     arrange(desc(Average_Price))
+#   p <- ggplot(avg_prices, aes(x = reorder(neighbourhood_cleansed, Average_Price), y = Average_Price)) +
+#     geom_bar(stat = "identity", fill = "lightpink") +
+#     labs(title = "Average Renting Price per City Quarter", x = "City Quarter", y = "Average Price (€)") +
+#     theme_minimal() +
+#     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+#   ggplotly(p)
+# }
+```
+
+This output visualizes the average renting prices across different city quarters based on user selections.
+
+**Visit Frequency Over Time**
+Analyzes and plots the visit frequency to different city quarters over a selected time range.
+
+```{r}
+#output$visitFrequencyPlot <- renderPlotly({
+#  quarters_data <- if (length(input$quarterFrequencySelect) > 0) {
+#    L %>% filter(neighbourhood_cleansed %in% input$quarterFrequencySelect)
+#  } else {
+#    L
+#  }
+#  merged_data <- merge(quarters_data, R, by.x = "id", by.y = "listing_id")
+#  date_filtered_data <- merged_data %>%
+#    filter(date >= input$dateRange[1] & date <= input$dateRange[2])
+#  visit_frequency_data <- date_filtered_data %>%
+#    group_by(neighbourhood_cleansed, month = floor_date(date, "month")) %>%
+#    summarise(Visits = n()) %>%
+#    arrange(neighbourhood_cleansed, month)
+#  p <- ggplot(visit_frequency_data, aes(x = month, y = Visits, color = #neighbourhood_cleansed, group = neighbourhood_cleansed)) +
+#    geom_line() + geom_point() +
+#    labs(title = "Visit Frequency Over Time by City Quarter", x = "Month", y = #"Number of Visits") +
+#    theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+#  ggplotly(p)
+#})
+```
+
+This code block creates an interactive time-series plot showing how visitation to different quarters changes over time.
+
+**Interactive Map of Airbnb Listings**
+Renders an interactive map displaying Airbnb listings with detailed information.
+```{r}
+#output$airbnbMap <- renderLeaflet({
+#  data <- L %>% filter(!is.na(latitude) & !is.na(longitude)) %>%
+#    mutate(price = as.numeric(gsub("[$,]", "", price)))
+#  leaflet(data) %>%
+#    addTiles() %>%
+#    addMarkers(~longitude, ~latitude, popup = ~paste("Price: $", price, "<br>", #"Neighbourhood: ", neighbourhood_cleansed, "<br>", "Accommodates: ", #accommodates), clusterOptions = markerClusterOptions())
+#})
+```
+This segment of the server logic uses the leaflet package to create a map visualization of the listings, enhancing the geographic analysis of the data.
+shinyApp(ui, server)
+
+## Scientific Comments on the Data Based on Statistical Results
+
+The statistical results derived from the Shiny app provide insightful observations about the AirBnB listings:
+
+### Listing Price Distribution
+
+- The scatter plots reveal that the relationship between price and the number of amenities offered by each property is not strictly linear, indicating that while more amenities could potentially lead to a higher listing price, other factors are also at play.
+- Similarly, the price distribution with respect to the number of bathrooms, bedrooms, and accommodation capacity demonstrates that larger properties tend to be priced higher. However, there are exceptions, and outliers suggest that unique features or locations might significantly affect pricing.
+
+### Apartments Per Owner
+
+- The distribution of apartments per owner indicates a skewed market, with some hosts owning multiple properties. This could point to the professionalization of AirBnB hosting or reflect a trend of property investment in short-term rentals.
+
+### Renting Price Per City Quarter
+
+- The average renting price across different city quarters showcases the variability of the real estate market within the city. Certain quarters, such as those central or with touristic attractions, command higher average prices, underscoring the influence of location on property value.
+
+### Visit Frequency of Different Quarters Over Time
+
+- The time-series analysis of visit frequencies across different city quarters over time highlights seasonal trends and the growing or waning popularity of certain areas. This may correlate with events, changes in travel patterns, or evolving preferences of travelers.
+
+Overall, the data underscores the multifaceted nature of the rental market and highlights the importance of a range of factors from amenities and capacity to location and seasonality in influencing prices and popularity of listings.
+
+# Conclusion
+
+Through the interactive visualizations and analyses provided by our Shiny app, several key insights into the AirBnB market have been uncovered:
+
+1. **Amenities Impact on Price**: The presence of amenities contributes to higher listing prices, but the relationship is complex and influenced by other factors such as location and unique property features.
+
+2. **Property Size and Price Correlation**: There is a general trend that larger properties (more bedrooms, bathrooms, and higher accommodation capacity) command higher prices. However, outliers suggest that premium pricing is also attributed to exceptional properties or desirable locations.
+
+3. **Host Property Portfolios**: A small number of hosts control a significant proportion of the listings, indicating a possible trend towards professional hosting or investment properties in the short-term rental market.
+
+4. **Geographical Pricing Trends**: Location remains a prime factor in pricing strategies, with central and popular city quarters having higher average rental prices. This underlines the classic real estate adage of "location, location, location".
+
+5. **Seasonal and Temporal Popularity**: The visitation patterns reflect seasonal trends and suggest that city quarters rise and fall in popularity over time. This dynamic may be influenced by a variety of factors, including seasonal events, changes in urban infrastructure, and evolving traveler preferences.
+
+6. **Data-Driven Decisions for Hosts and Renters**: Both hosts and renters can leverage these insights for better decision-making. Hosts can optimize their pricing and amenities based on what's valued in the market, while renters can make informed choices about when and where to book properties.
+
+7. **Market Complexity and Opportunities**: The AirBnB market in Paris is multifaceted, offering opportunities for hosts to differentiate their listings and for renters to find properties that best match their preferences.
+
+The Shiny application facilitates a deeper understanding of the nuanced AirBnB rental landscape, and the interplay of factors affecting it. This analysis can help stakeholders to navigate the market more effectively and underscores the value of data-driven approaches in the sharing economy.
+
