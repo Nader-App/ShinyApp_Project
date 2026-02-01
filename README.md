@@ -4,8 +4,6 @@ Big Data Processing with R
 
 ## 1 Objectives
 
-The examination will be in two parts:
-
 ### 1.1 Shiny application
 
 Create a Shiny application that allows to explore the AirBnB data (Paris data).
